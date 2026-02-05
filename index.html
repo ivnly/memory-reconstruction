@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Memory Reconstruction</title>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --text-color: #d0d0d0;
+            --accent-color: #444;
+            --highlight-color: #f0f0f0;
+            --font-main: 'Georgia', serif;
+            --transition-speed: 1.5s;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background: linear-gradient(to bottom, #111 0%, #050505 100%);
+            color: var(--text-color);
+            font-family: var(--font-main);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            user-select: none;
+            cursor: default;
+        }
+
+        #app {
+            text-align: center;
+            max-width: 700px;
+            width: 100%;
+            padding: 2rem;
+            opacity: 1;
+            transition: opacity var(--transition-speed) ease-in-out;
+        }
+
+        /* Utility specific for the content inside */
+        .content-fade {
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+        }
+
+        .content-fade.visible {
+            opacity: 1;
+        }
+
+        h1 {
+            font-weight: 300;
+            font-size: 1.8rem;
+            margin-bottom: 2.5rem;
+            letter-spacing: 0.1em;
+            color: var(--highlight-color);
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.8;
+            margin-bottom: 2rem;
+            color: #bbb;
+        }
+
+        .word-display {
+            font-size: 3.5rem;
+            font-weight: 300;
+            letter-spacing: 0.15em;
+            opacity: 0;
+            transition: opacity 1s ease-in-out;
+            color: var(--highlight-color);
+        }
+
+        .word-display.visible {
+            opacity: 1;
+        }
+
+        button {
+            background: transparent;
+            border: 1px solid var(--accent-color);
+            color: var(--text-color);
+            padding: 12px 36px;
+            font-size: 0.9rem;
+            font-family: inherit;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            cursor: pointer;
+            transition: all 0.5s ease;
+            margin: 0 10px;
+            opacity: 0.6;
+            margin-top: 2rem;
+        }
+
+        button:hover {
+            border-color: var(--highlight-color);
+            color: var(--highlight-color);
+            opacity: 1;
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .options {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 3rem;
+        }
+
+        .reflection-container {
+            text-align: left;
+            margin-top: 2rem;
+            border-left: 1px solid #333;
+            padding-left: 2rem;
+        }
+
+        .reflection-item {
+            margin-bottom: 1.5rem;
+            opacity: 0;
+            transform: translateY(10px);
+            transition: all 1s ease-out;
+        }
+
+        .reflection-item.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .reflection-highlight {
+            color: #fff;
+            border-bottom: 1px dotted #666;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <!-- Content will be injected here by JS -->
+    </div>
+
+    <script>
+        /**
+         * MEMORY RECONSTRUCTION EXPERIENCE
+         * Based on the Deese-Roediger-McDermott (DRM) paradigm.
+         */
+
+        // Standardized DRM Lists
+        const drmSets = [
+            {
+                id: 'sleep',
+                lure: 'Sleep',
+                list: ['Bed', 'Rest', 'Awake', 'Tired', 'Dream', 'Wake', 'Snooze', 'Blanket', 'Doze', 'Slumber', 'Snore', 'Nap', 'Peace', 'Yawn', 'Drowsy'],
+                tests: [
+                    { word: 'Bed', type: 'shown' },
+                    { word: 'Chair', type: 'new' },
+                    { word: 'Sleep', type: 'lure' },
+                    { word: 'Tired', type: 'shown' },
+                    { word: 'Mountain', type: 'new' },
+                    { word: 'Drowsy', type: 'shown' }
+                ]
+            },
+            {
+                id: 'sweet',
+                lure: 'Sweet',
+                list: ['Sour', 'Candy', 'Sugar', 'Bitter', 'Good', 'Taste', 'Tooth', 'Nice', 'Honey', 'Soda', 'Chocolate', 'Heart', 'Cake', 'Tart', 'Pie'],
+                tests: [
+                    { word: 'Sour', type: 'shown' },
+                    { word: 'Table', type: 'new' },
+                    { word: 'Sweet', type: 'lure' },
+                    { word: 'Sugar', type: 'shown' },
+                    { word: 'Pen', type: 'new' },
+                    { word: 'Honey', type: 'shown' }
+                ]
+            },
+            {
+                id: 'needle',
+                lure: 'Needle',
+                list: ['Thread', 'Pin', 'Eye', 'Sewing', 'Sharp', 'Point', 'Prick', 'Thimble', 'Haystack', 'Thorn', 'Hurt', 'Injection', 'Syringe', 'Cloth', 'Knitting'],
+                tests: [
+                    { word: 'Thread', type: 'shown' },
+                    { word: 'Phone', type: 'new' },
+                    { word: 'Needle', type: 'lure' },
+                    { word: 'Sharp', type: 'shown' },
+                    { word: 'River', type: 'new' },
+                    { word: 'Knitting', type: 'shown' }
+                ]
+            },
+            {
+                id: 'rough',
+                lure: 'Rough',
+                list: ['Smooth', 'Bumpy', 'Road', 'Tough', 'Sandpaper', 'Jagged', 'Ready', 'Coarse', 'Uneven', 'Riders', 'Rugged', 'Sand', 'Boards', 'Ground', 'Gravel'],
+                tests: [
+                    { word: 'Smooth', type: 'shown' },
+                    { word: 'Light', type: 'new' },
+                    { word: 'Rough', type: 'lure' },
+                    { word: 'Tough', type: 'shown' },
+                    { word: 'Music', type: 'new' },
+                    { word: 'Gravel', type: 'shown' }
+                ]
+            }
+        ];
+
+        let currentSet = null;
+        let playedSets = new Set();
+        let userResponses = new Map(); // Map<string, boolean>
+
+        const app = document.getElementById('app');
+
+        // Utils
+        const delay = (ms) => new Promise(res => setTimeout(res, ms));
+
+        function getNextSet() {
+            // Filter out played sets
+            const available = drmSets.filter(s => !playedSets.has(s.id));
+
+            if (available.length === 0) {
+                // Reset if all played
+                playedSets.clear();
+                return drmSets[Math.floor(Math.random() * drmSets.length)];
+            }
+
+            // Pick random from available
+            const set = available[Math.floor(Math.random() * available.length)];
+            playedSets.add(set.id);
+            return set;
+        }
+
+        // TRANSITIONS
+        async function fadeOutContent() {
+            const content = app.querySelector('.content-fade');
+            if (content) {
+                content.classList.remove('visible');
+                await delay(1000);
+            }
+        }
+
+        async function fadeInContent(html) {
+            app.innerHTML = `<div class="content-fade">${html}</div>`;
+            // Force reflow
+            void app.offsetWidth;
+            const content = app.querySelector('.content-fade');
+            content.classList.add('visible');
+            await delay(1000);
+        }
+
+        // --- PHASE 1: INTRO ---
+        async function runIntro(isReplay = false) {
+            let title = "Memory is not a recording.";
+            let btnText = "Begin";
+
+            if (isReplay) {
+                title = "Prepare for the next sequence.";
+                btnText = "Ready";
+            }
+
+            const html = `
+                <h1>${title}</h1>
+                <p>We often believe our memory works like a video camera,<br>faithfully storing every detail.</p>
+                <p>In a moment, you will see a series of words.</p>
+                <p>Relax, watch, and simply remember.</p>
+                <div class="options">
+                    <button onclick="startExperience()">${btnText}</button>
+                </div>
+            `;
+            await fadeInContent(html);
+        }
+
+        window.startExperience = async function () {
+            await fadeOutContent();
+            currentSet = getNextSet();
+            await runSequence();
+        };
+
+        // --- PHASE 2: SEQUENCE ---
+        async function runSequence() {
+            // Clear stage
+            app.innerHTML = '';
+            await delay(1000);
+
+            for (const word of currentSet.list) {
+                // Show word
+                app.innerHTML = `<div class="word-display">${word}</div>`;
+                // Trigger fade in
+                requestAnimationFrame(() => {
+                    const el = app.querySelector('.word-display');
+                    if (el) el.classList.add('visible');
+                });
+
+                // Wait visible duration
+                await delay(1500);
+
+                // Trigger fade out
+                const el = app.querySelector('.word-display');
+                if (el) el.classList.remove('visible');
+
+                // Wait before next word
+                await delay(1000);
+            }
+
+            await runDelay();
+        }
+
+        // --- PHASE 3: DELAY ---
+        async function runDelay() {
+            app.innerHTML = '';
+            await delay(3000); // Quiet darkness
+            await runRecall(0);
+        }
+
+        // --- PHASE 4: RECALL ---
+        async function runRecall(index) {
+            if (index >= currentSet.tests.length) {
+                await fadeOutContent();
+                await runReveal();
+                return;
+            }
+
+            const item = currentSet.tests[index];
+
+            // Setup the question UI
+            const html = `
+                <p>Did this word appear in the sequence?</p>
+                <div class="word-display visible" style="font-size: 2.5rem; margin: 2rem 0;">${item.word}</div>
+                <div class="options">
+                    <button id="btn-yes">Yes</button>
+                    <button id="btn-no">No</button>
+                </div>
+            `;
+
+            app.innerHTML = `<div class="content-fade">${html}</div>`;
+            void app.offsetWidth;
+            app.querySelector('.content-fade').classList.add('visible');
+
+            // Bind events with safety
+            const btnYes = document.getElementById('btn-yes');
+            const btnNo = document.getElementById('btn-no');
+
+            const safeHandle = (response) => {
+                // Disable buttons to prevent double interactions
+                btnYes.disabled = true;
+                btnNo.disabled = true;
+                btnYes.style.opacity = '0.5';
+                btnNo.style.opacity = '0.5';
+                handleResponse(item, response, index);
+            };
+
+            btnYes.onclick = () => safeHandle(true);
+            btnNo.onclick = () => safeHandle(false);
+        }
+
+        async function handleResponse(item, response, index) {
+            userResponses.set(item.word, response);
+
+            // Fade out slightly faster
+            const content = app.querySelector('.content-fade');
+            content.classList.remove('visible');
+            await delay(500);
+
+            runRecall(index + 1);
+        }
+
+        // --- PHASE 5: REVEAL ---
+        async function runReveal() {
+            const lured = userResponses.get(currentSet.lure);
+            const patterns = currentSet.list.slice(0, 4).join(', ');
+
+            let html = `
+                <h1>The Reconstruction</h1>
+                <div class="reflection-container">
+            `;
+
+            // 1. Analyze the Lure
+            if (lured) {
+                html += `
+                    <div class="reflection-item" style="transition-delay: 0.5s">
+                        <p>You remembered seeing <span class="reflection-highlight">${currentSet.lure}</span>.</p>
+                        <p style="font-size: 0.9em; color: #888;">But "${currentSet.lure}" was never in the list.</p>
+                    </div>
+                    <div class="reflection-item" style="transition-delay: 2.5s">
+                        <p>Your brain recognized the pattern—${patterns}...</p>
+                        <p style="font-size: 0.9em; color: #888;">It built a memory of "${currentSet.lure}" to complete the set.</p>
+                    </div>
+                `;
+            } else {
+                html += `
+                    <div class="reflection-item" style="transition-delay: 0.5s">
+                        <p>You correctly realized <span class="reflection-highlight">${currentSet.lure}</span> was missing.</p>
+                        <p style="font-size: 0.9em; color: #888;">Ideally, about 40-50% of people falsely remember it.</p>
+                    </div>
+                    <div class="reflection-item" style="transition-delay: 2.5s">
+                        <p>The list was designed to trigger this concept: ${patterns}...</p>
+                    </div>
+                `;
+            }
+
+            html += `
+                    <div class="reflection-item" style="transition-delay: 5s">
+                        <br>
+                        <p>Memory is an active process of reconstruction.</p>
+                        <p>We do not playback the past. <span class="reflection-highlight">We rebuild it.</span></p>
+                    </div>
+                </div>
+                <div class="reflection-item" style="transition-delay: 8s; text-align: center; margin-top: 3rem;">
+                    <div class="options">
+                        <button onclick="runIntro(true)">Reconstruct Again</button>
+                        <button onclick="runEducation()">Scientific Context</button>
+                    </div>
+                </div>
+            `;
+
+            app.innerHTML = `<div class="content-fade">${html}</div>`;
+            void app.offsetWidth;
+            app.querySelector('.content-fade').classList.add('visible');
+
+            // Trigger stagger animations manually
+            setTimeout(() => {
+                document.querySelectorAll('.reflection-item').forEach(el => el.classList.add('visible'));
+            }, 100);
+        }
+
+        // --- EDUCATIONAL PAGE ---
+        window.runEducation = async function () {
+            await fadeOutContent();
+
+            const html = `
+                <h1>Scientific Context</h1>
+                <div class="reflection-container" style="max-height: 60vh; overflow-y: auto; padding-right: 1rem;">
+                    <div class="reflection-item visible" style="margin-bottom: 2.5rem;">
+                        <h3 style="color: #fff; margin-bottom: 0.5rem;">The DRM Paradigm</h3>
+                        <p style="font-size: 1rem;">The task you just performed is known as the <span class="reflection-highlight">Deese-Roediger-McDermott (DRM) paradigm</span>. It is one of the most robust methods for demonstrating false memories in psychology. Studies consistently show that 40-55% of participants recall the critical lure word with high confidence.</p>
+                    </div>
+
+                    <div class="reflection-item visible" style="margin-bottom: 2.5rem;">
+                        <h3 style="color: #fff; margin-bottom: 0.5rem;">Schema Theory</h3>
+                        <p style="font-size: 1rem;">Our brains are cognitive misers; they do not store every pixel or sound wave. Instead, they store <span class="reflection-highlight">schemata</span>—mental frameworks or blueprints. When you saw "Bed, Rest, Tired," your brain activated its "Sleep" schema. When asked to recall, it reconstructed the list based on this schema, inadvertently including the central concept.</p>
+                    </div>
+
+                    <div class="reflection-item visible" style="margin-bottom: 2.5rem;">
+                        <h3 style="color: #fff; margin-bottom: 0.5rem;">Source Monitoring</h3>
+                        <p style="font-size: 1rem;">A key failure in false memory is a <span class="reflection-highlight">source monitoring error</span>. During the list presentation, you likely thought of the word "Sleep" internally. Later, your brain struggles to distinguish between the internal source (your thought) and the external source (the screen).</p>
+                    </div>
+                    
+                    <div class="reflection-item visible">
+                         <h3 style="color: #fff; margin-bottom: 0.5rem;">Reconsolidation</h3>
+                         <p style="font-size: 1rem;">Every time a memory is retrieved, it becomes labile (changeable) before being stored again. This process, called <span class="reflection-highlight">reconsolidation</span>, means that the very act of remembering leaves the memory vulnerable to alteration.</p>
+                    </div>
+                </div>
+                <div style="margin-top: 2rem;">
+                    <button onclick="runIntro(true)">Return to Experience</button>
+                </div>
+            `;
+
+            await fadeInContent(html);
+        };
+
+        // Initial Load
+        window.addEventListener('load', () => {
+            runIntro();
+        });
+
+    </script>
+</body>
+
+</html>
